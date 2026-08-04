@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "enacton-tracker": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\vrcha\\Downloads\\Activity Tracker dashboard\\enacton-tracker\\mcp-server\\dist\\index.js"
+      ]
+    }
+  }
+}
