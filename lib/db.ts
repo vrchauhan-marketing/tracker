@@ -1,27 +1,34 @@
 import 'server-only'
-import Database from 'better-sqlite3'
-import path from 'path'
-import fs from 'fs'
 
-// Singleton pattern: prevents multiple connections on Next.js hot reload
 declare global {
-  var _sqlite: Database.Database | undefined
+  var _sqlite: any
 }
 
-function getDatabase(): Database.Database {
-  if (!global._sqlite) {
+function getDatabase() {
+  if (global._sqlite) return global._sqlite
+  try {
+    // Dynamic require so webpack/turbopack doesn't break when bundling for Edge
+    const Database = require('better-sqlite3')
+    const path = require('path')
+    const fs = require('fs')
+
     const dbPath = path.join(process.cwd(), 'enacton-tracker.sqlite')
     const schemaPath = path.join(process.cwd(), 'schema.sql')
 
-    global._sqlite = new Database(dbPath)
-    global._sqlite.pragma('journal_mode = WAL')
-    global._sqlite.pragma('foreign_keys = ON')
+    const db = new Database(dbPath)
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
 
-    // Run schema on first connection (idempotent — uses IF NOT EXISTS)
-    const schema = fs.readFileSync(schemaPath, 'utf-8')
-    global._sqlite.exec(schema)
+    if (fs.existsSync(schemaPath)) {
+      const schema = fs.readFileSync(schemaPath, 'utf-8')
+      db.exec(schema)
+    }
+    global._sqlite = db
+    return db
+  } catch (e) {
+    // Graceful fallback for Edge / Cloudflare Workers environment
+    return null
   }
-  return global._sqlite
 }
 
 export const db = getDatabase()
