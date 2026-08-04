@@ -6,8 +6,8 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Enacton Tracker — GEO Activity Dashboard",
-  description: "Track Enacton's community outreach activities across Reddit, Quora, Dev.to and Medium to measure GEO and AEO footprint.",
+  title: "Tracker — GEO Activity Dashboard",
+  description: "Track community outreach activities across Reddit, Quora, Dev.to and Medium to measure GEO and AEO footprint.",
 };
 
 export default function RootLayout({

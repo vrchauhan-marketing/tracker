@@ -65,8 +65,8 @@ export default function Sidebar() {
             </svg>
           </div>
           <div>
-            <div className="text-sm font-bold text-white">Enacton</div>
-            <div className="text-xs text-slate-500">GEO Tracker</div>
+            <div className="text-base font-bold text-white tracking-wide">Tracker</div>
+            <div className="text-xs text-slate-500">GEO Outreach</div>
           </div>
         </div>
       </div>
@@ -98,7 +98,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-6 py-4 border-t border-slate-800">
-        <div className="text-xs text-slate-600">Enacton Activity Tracker</div>
+        <div className="text-xs text-slate-600">Tracker App</div>
         <div className="text-xs text-slate-700">v1.0.0</div>
       </div>
     </aside>
