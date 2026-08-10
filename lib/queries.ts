@@ -45,13 +45,31 @@ const DEFAULT_TOPICS: Topic[] = [
   { id: '9', name: 'Other', color: '#6b7280', is_active: 1, created_at: '' },
 ]
 
+// Convert Postgres Date objects to clean strings to prevent React rendering errors
+function formatActivityRow(a: any): Activity {
+  if (!a) return a
+  return {
+    ...a,
+    date_posted: a.date_posted instanceof Date 
+      ? a.date_posted.toISOString().split('T')[0] 
+      : String(a.date_posted),
+    created_at: a.created_at instanceof Date 
+      ? a.created_at.toISOString() 
+      : String(a.created_at),
+    last_scraped_at: a.last_scraped_at instanceof Date 
+      ? a.last_scraped_at.toISOString() 
+      : a.last_scraped_at ? String(a.last_scraped_at) : null
+  }
+}
+
 // ─── Activities ───────────────────────────────────────────────
 
 export async function getAllActivities(): Promise<Activity[]> {
   const sql = await getSql()
   if (!sql) return []
   try {
-    return await sql`SELECT * FROM activities ORDER BY date_posted DESC, created_at DESC` as any
+    const rows = await sql`SELECT * FROM activities ORDER BY date_posted DESC, created_at DESC`
+    return rows.map(formatActivityRow)
   } catch { return [] }
 }
 
@@ -59,11 +77,12 @@ export async function getActivitiesThisWeek(): Promise<Activity[]> {
   const sql = await getSql()
   if (!sql) return []
   try {
-    return await sql`
+    const rows = await sql`
       SELECT * FROM activities
       WHERE date_posted >= CURRENT_DATE - INTERVAL '7 days'
       ORDER BY date_posted DESC, created_at DESC
-    ` as any
+    `
+    return rows.map(formatActivityRow)
   } catch { return [] }
 }
 
@@ -84,7 +103,8 @@ export async function getActivitiesFiltered(platform?: string, topic?: string, p
     }
 
     query = sql`${query} ORDER BY date_posted DESC, created_at DESC`
-    return await query as any
+    const rows = await query
+    return rows.map(formatActivityRow)
   } catch { return [] }
 }
 
@@ -93,7 +113,7 @@ export async function getActivityByUrl(url: string): Promise<Activity | undefine
   if (!sql) return undefined
   try {
     const rows = await sql`SELECT * FROM activities WHERE url = ${url}`
-    return rows[0] as any
+    return rows[0] ? formatActivityRow(rows[0]) : undefined
   } catch { return undefined }
 }
 
@@ -102,7 +122,7 @@ export async function getActivityById(id: string): Promise<Activity | undefined>
   if (!sql) return undefined
   try {
     const rows = await sql`SELECT * FROM activities WHERE id = ${id}`
-    return rows[0] as any
+    return rows[0] ? formatActivityRow(rows[0]) : undefined
   } catch { return undefined }
 }
 
