@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 import { getActivitiesFiltered, getActiveTopics } from '@/lib/queries'
 import Link from 'next/link'
 import FeedFilters from '@/components/FeedFilters'
+import ActivityRowActions from '@/components/ActivityRowActions'
 
 const PLATFORM_CLASS: Record<string, string> = {
   Reddit: 'platform-reddit', Quora: 'platform-quora', 'Dev.to': 'platform-devto',
@@ -99,6 +100,7 @@ export default async function FeedPage({
                           <th>Type</th>
                           <th>Engagement</th>
                           <th>Logged By</th>
+                          <th className="text-right pr-6">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -116,7 +118,7 @@ export default async function FeedPage({
                                   )}
                                 </div>
                               </td>
-                              <td style={{ maxWidth: '320px' }}>
+                              <td style={{ maxWidth: '300px' }}>
                                 <div className="flex items-start gap-2.5">
                                   {a.screenshot && (
                                     <img src={a.screenshot} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0 mt-0.5 border border-slate-700" />
@@ -165,6 +167,9 @@ export default async function FeedPage({
                                 )}
                               </td>
                               <td className="text-slate-500 text-xs font-medium">{a.logged_by || '—'}</td>
+                              <td className="text-right pr-6">
+                                <ActivityRowActions activity={a} topics={topics} />
+                              </td>
                             </tr>
                           )
                         })}

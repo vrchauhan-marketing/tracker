@@ -96,6 +96,13 @@ export function getActivityByUrl(url: string): Activity | undefined {
   } catch { return undefined }
 }
 
+export function getActivityById(id: string): Activity | undefined {
+  if (!db) return undefined
+  try {
+    return db.prepare(`SELECT * FROM activities WHERE id = ?`).get(id) as Activity | undefined
+  } catch { return undefined }
+}
+
 export function insertActivity(data: {
   date_posted: string
   platform: string
@@ -133,6 +140,62 @@ export function insertActivity(data: {
     if (e.message?.includes('UNIQUE constraint failed')) {
       return { success: false, error: 'DUPLICATE_URL' }
     }
+    return { success: false, error: e.message }
+  }
+}
+
+export function updateActivity(id: string, data: {
+  date_posted: string
+  platform: string
+  activity_type: string
+  subreddit?: string
+  is_promotional?: number
+  url: string
+  title?: string
+  topic_tags: string[]
+  notes?: string
+  logged_by?: string
+}): { success: boolean; error?: string } {
+  if (!db) return { success: false, error: 'Database connection not available.' }
+  try {
+    db.prepare(`
+      UPDATE activities
+      SET date_posted = ?,
+          platform = ?,
+          activity_type = ?,
+          subreddit = ?,
+          is_promotional = ?,
+          url = ?,
+          title = ?,
+          topic_tags = ?,
+          notes = ?,
+          logged_by = ?
+      WHERE id = ?
+    `).run(
+      data.date_posted,
+      data.platform,
+      data.activity_type,
+      data.subreddit || null,
+      data.is_promotional ?? 0,
+      data.url,
+      data.title || null,
+      JSON.stringify(data.topic_tags),
+      data.notes || null,
+      data.logged_by || null,
+      id
+    )
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+}
+
+export function deleteActivity(id: string): { success: boolean; error?: string } {
+  if (!db) return { success: false, error: 'Database connection not available.' }
+  try {
+    db.prepare(`DELETE FROM activities WHERE id = ?`).run(id)
+    return { success: true }
+  } catch (e: any) {
     return { success: false, error: e.message }
   }
 }
