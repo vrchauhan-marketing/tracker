@@ -2,9 +2,10 @@ export const runtime = 'nodejs'
 import { getAllTopics, getSetting } from '@/lib/queries'
 import SettingsForm from '@/components/SettingsForm'
 
-export default function SettingsPage() {
-  const topics = getAllTopics()
-  const weeklyTarget = getSetting('weekly_target') ?? '10'
+export default async function SettingsPage() {
+  const topics = await getAllTopics()
+  const rawTarget = await getSetting('weekly_target')
+  const weeklyTarget = rawTarget ?? '10'
 
   return (
     <div className="max-w-2xl mx-auto">

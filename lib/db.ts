@@ -1,37 +1,77 @@
 import 'server-only'
+import postgres from 'postgres'
+import fs from 'fs'
+import path from 'path'
 
 declare global {
-  var _sqlite: any
+  var _postgres: any
 }
 
-function getDatabase() {
-  if (global._sqlite) return global._sqlite
+async function initDatabase() {
+  if (global._postgres) return global._postgres
+
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString || connectionString.includes('[YOUR-PASSWORD]')) {
+    console.error('DATABASE_URL is missing or contains placeholder [YOUR-PASSWORD].')
+    return null
+  }
+
   try {
-    const Database = require('better-sqlite3')
-    const path = require('path')
-    const fs = require('fs')
+    const sql = postgres(connectionString, {
+      ssl: 'require',
+      max: 10,
+      idle_timeout: 20,
+    })
 
-    const dbPath = path.join(process.cwd(), 'enacton-tracker.sqlite')
-    const schemaPath = path.join(process.cwd(), 'schema.sql')
+    // Auto-create tables in Supabase if topics doesn't exist
+    const tableCheck = await sql`
+      SELECT EXISTS (
+        SELECT FROM pg_tables
+        WHERE schemaname = 'public'
+        AND tablename  = 'topics'
+      );
+    `
 
-    const db = new Database(dbPath)
-    db.pragma('journal_mode = WAL')
-    db.pragma('foreign_keys = ON')
-
-    if (fs.existsSync(schemaPath)) {
-      const schema = fs.readFileSync(schemaPath, 'utf-8')
-      db.exec(schema)
+    if (!tableCheck[0].exists) {
+      const schemaPath = path.join(process.cwd(), 'schema.sql')
+      if (fs.existsSync(schemaPath)) {
+        let schema = fs.readFileSync(schemaPath, 'utf-8')
+        
+        // Convert SQLite syntax to PostgreSQL syntax dynamically
+        schema = schema
+          .replace(/DATETIME DEFAULT \(datetime\('now'\)\)/gi, "TIMESTAMP WITH TIME ZONE DEFAULT NOW()")
+          .replace(/DATETIME/gi, "TIMESTAMP WITH TIME ZONE")
+          .replace(/INTEGER NOT NULL DEFAULT 0/gi, "INTEGER NOT NULL DEFAULT 0")
+          .replace(/INSERT OR IGNORE/gi, "INSERT INTO")
+        
+        const statements = schema
+          .split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0)
+        
+        for (const statement of statements) {
+          try {
+            await sql.unsafe(statement)
+          } catch (e) {
+            console.error('Failed to run migration statement:', statement, e)
+          }
+        }
+      }
     }
 
-    // Auto-migrate columns if missing in existing database
-    try { db.exec(`ALTER TABLE activities ADD COLUMN subreddit TEXT;`) } catch {}
-    try { db.exec(`ALTER TABLE activities ADD COLUMN is_promotional INTEGER NOT NULL DEFAULT 0;`) } catch {}
-
-    global._sqlite = db
-    return db
+    global._postgres = sql
+    return sql
   } catch (e) {
+    console.error('Failed to initialize PostgreSQL client:', e)
     return null
   }
 }
 
-export const db = getDatabase()
+export const sqlPromise = initDatabase()
+
+let sqlClient: any = null
+export async function getSql() {
+  if (sqlClient) return sqlClient
+  sqlClient = await sqlPromise
+  return sqlClient
+}

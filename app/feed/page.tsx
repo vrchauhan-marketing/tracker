@@ -37,8 +37,8 @@ export default async function FeedPage({
   const topic = params.topic || 'all'
   const promotional = params.promotional || 'all'
 
-  const activities = getActivitiesFiltered(platform, topic, promotional)
-  const topics = getActiveTopics()
+  const activities = await getActivitiesFiltered(platform, topic, promotional)
+  const topics = await getActiveTopics()
 
   // Group activities by date_posted for Day-by-Day view
   const groupedByDate: Record<string, typeof activities> = {}

@@ -11,10 +11,10 @@ const TYPE_CLASS: Record<string, string> = {
   'Article': 'badge-article', 'Post / Thread': 'badge-post', 'Comment / Answer': 'badge-comment',
 }
 
-export default function ThisWeekPage() {
-  const stats = getTopLevelStats()
-  const weekActivities = getActivitiesThisWeek()
-  const platformBreakdown = getPlatformWeeklyCount()
+export default async function ThisWeekPage() {
+  const stats = await getTopLevelStats()
+  const weekActivities = await getActivitiesThisWeek()
+  const platformBreakdown = await getPlatformWeeklyCount()
 
   const topicCounts: Record<string, number> = {}
   weekActivities.forEach(a => {

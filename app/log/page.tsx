@@ -3,8 +3,8 @@ import LogForm from '@/components/LogForm'
 
 export const runtime = 'nodejs'
 
-export default function LogPage() {
-  const topics = getActiveTopics()
+export default async function LogPage() {
+  const topics = await getActiveTopics()
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">

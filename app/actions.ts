@@ -33,7 +33,7 @@ export async function logActivityAction(formData: FormData) {
     screenshot = `data:${mime};base64,${base64}`
   }
 
-  const result = insertActivity({
+  const result = await insertActivity({
     date_posted,
     platform,
     activity_type,
@@ -55,7 +55,7 @@ export async function logActivityAction(formData: FormData) {
   }
 
   const { getActivityByUrl } = await import('@/lib/queries')
-  const saved = getActivityByUrl(url)
+  const saved = await getActivityByUrl(url)
   if (saved) {
     scrapeActivity(url, saved.id).catch(() => {})
   }
@@ -84,7 +84,7 @@ export async function updateActivityAction(formData: FormData) {
   if (!date_posted) return { success: false, error: 'Date is required' }
   if (!topic_tags.length) return { success: false, error: 'Select at least one topic' }
 
-  const result = updateActivity(id, {
+  const result = await updateActivity(id, {
     date_posted,
     platform,
     activity_type,
@@ -104,7 +104,7 @@ export async function updateActivityAction(formData: FormData) {
 }
 
 export async function deleteActivityAction(id: string) {
-  const result = deleteActivity(id)
+  const result = await deleteActivity(id)
   revalidatePath('/')
   revalidatePath('/feed')
   revalidatePath('/analytics')

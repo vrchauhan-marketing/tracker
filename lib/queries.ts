@@ -1,5 +1,5 @@
 import 'server-only'
-import { db } from './db'
+import { getSql } from './db'
 import { randomUUID } from 'crypto'
 
 export type Platform = 'Reddit' | 'Quora' | 'Dev.to' | 'Medium' | 'LinkedIn' | 'Facebook' | 'Instagram' | 'Other'
@@ -47,63 +47,66 @@ const DEFAULT_TOPICS: Topic[] = [
 
 // ─── Activities ───────────────────────────────────────────────
 
-export function getAllActivities(): Activity[] {
-  if (!db) return []
+export async function getAllActivities(): Promise<Activity[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    return db.prepare(`SELECT * FROM activities ORDER BY date_posted DESC, created_at DESC`).all() as Activity[]
+    return await sql`SELECT * FROM activities ORDER BY date_posted DESC, created_at DESC` as any
   } catch { return [] }
 }
 
-export function getActivitiesThisWeek(): Activity[] {
-  if (!db) return []
+export async function getActivitiesThisWeek(): Promise<Activity[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    return db.prepare(`
+    return await sql`
       SELECT * FROM activities
-      WHERE date(date_posted) >= date('now', '-7 days')
+      WHERE date_posted >= CURRENT_DATE - INTERVAL '7 days'
       ORDER BY date_posted DESC, created_at DESC
-    `).all() as Activity[]
+    ` as any
   } catch { return [] }
 }
 
-export function getActivitiesFiltered(platform?: string, topic?: string, promotional?: string): Activity[] {
-  if (!db) return []
+export async function getActivitiesFiltered(platform?: string, topic?: string, promotional?: string): Promise<Activity[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    let query = `SELECT * FROM activities WHERE 1=1`
-    const params: string[] = []
+    let query = sql`SELECT * FROM activities WHERE 1=1`
 
     if (platform && platform !== 'all') {
-      query += ` AND platform = ?`
-      params.push(platform)
+      query = sql`${query} AND platform = ${platform}`
     }
     if (topic && topic !== 'all') {
-      query += ` AND topic_tags LIKE ?`
-      params.push(`%${topic}%`)
+      query = sql`${query} AND topic_tags LIKE ${'%' + topic + '%'}`
     }
     if (promotional && promotional !== 'all') {
-      query += ` AND is_promotional = ?`
-      params.push(promotional === 'yes' ? '1' : '0')
+      query = sql`${query} AND is_promotional = ${promotional === 'yes' ? 1 : 0}`
     }
 
-    query += ` ORDER BY date_posted DESC, created_at DESC`
-    return db.prepare(query).all(...params) as Activity[]
+    query = sql`${query} ORDER BY date_posted DESC, created_at DESC`
+    return await query as any
   } catch { return [] }
 }
 
-export function getActivityByUrl(url: string): Activity | undefined {
-  if (!db) return undefined
+export async function getActivityByUrl(url: string): Promise<Activity | undefined> {
+  const sql = await getSql()
+  if (!sql) return undefined
   try {
-    return db.prepare(`SELECT * FROM activities WHERE url = ?`).get(url) as Activity | undefined
+    const rows = await sql`SELECT * FROM activities WHERE url = ${url}`
+    return rows[0] as any
   } catch { return undefined }
 }
 
-export function getActivityById(id: string): Activity | undefined {
-  if (!db) return undefined
+export async function getActivityById(id: string): Promise<Activity | undefined> {
+  const sql = await getSql()
+  if (!sql) return undefined
   try {
-    return db.prepare(`SELECT * FROM activities WHERE id = ?`).get(id) as Activity | undefined
+    const rows = await sql`SELECT * FROM activities WHERE id = ${id}`
+    return rows[0] as any
   } catch { return undefined }
 }
 
-export function insertActivity(data: {
+export async function insertActivity(data: {
   date_posted: string
   platform: string
   activity_type: string
@@ -115,36 +118,37 @@ export function insertActivity(data: {
   notes?: string
   screenshot?: string
   logged_by?: string
-}): { success: boolean; error?: string } {
-  if (!db) return { success: false, error: 'Database connection not available.' }
+}): Promise<{ success: boolean; error?: string }> {
+  const sql = await getSql()
+  if (!sql) return { success: false, error: 'Database connection not available.' }
   try {
-    db.prepare(`
+    await sql`
       INSERT INTO activities (id, date_posted, platform, activity_type, subreddit, is_promotional, url, title, topic_tags, notes, screenshot, logged_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      randomUUID(),
-      data.date_posted,
-      data.platform,
-      data.activity_type,
-      data.subreddit || null,
-      data.is_promotional ?? 0,
-      data.url,
-      data.title || null,
-      JSON.stringify(data.topic_tags),
-      data.notes || null,
-      data.screenshot || null,
-      data.logged_by || null
-    )
+      VALUES (
+        ${randomUUID()},
+        ${data.date_posted},
+        ${data.platform},
+        ${data.activity_type},
+        ${data.subreddit || null},
+        ${data.is_promotional ?? 0},
+        ${data.url},
+        ${data.title || null},
+        ${JSON.stringify(data.topic_tags)},
+        ${data.notes || null},
+        ${data.screenshot || null},
+        ${data.logged_by || null}
+      )
+    `
     return { success: true }
   } catch (e: any) {
-    if (e.message?.includes('UNIQUE constraint failed')) {
+    if (e.message?.includes('unique') || e.message?.includes('duplicate')) {
       return { success: false, error: 'DUPLICATE_URL' }
     }
     return { success: false, error: e.message }
   }
 }
 
-export function updateActivity(id: string, data: {
+export async function updateActivity(id: string, data: {
   date_posted: string
   platform: string
   activity_type: string
@@ -155,140 +159,140 @@ export function updateActivity(id: string, data: {
   topic_tags: string[]
   notes?: string
   logged_by?: string
-}): { success: boolean; error?: string } {
-  if (!db) return { success: false, error: 'Database connection not available.' }
+}): Promise<{ success: boolean; error?: string }> {
+  const sql = await getSql()
+  if (!sql) return { success: false, error: 'Database connection not available.' }
   try {
-    db.prepare(`
+    await sql`
       UPDATE activities
-      SET date_posted = ?,
-          platform = ?,
-          activity_type = ?,
-          subreddit = ?,
-          is_promotional = ?,
-          url = ?,
-          title = ?,
-          topic_tags = ?,
-          notes = ?,
-          logged_by = ?
-      WHERE id = ?
-    `).run(
-      data.date_posted,
-      data.platform,
-      data.activity_type,
-      data.subreddit || null,
-      data.is_promotional ?? 0,
-      data.url,
-      data.title || null,
-      JSON.stringify(data.topic_tags),
-      data.notes || null,
-      data.logged_by || null,
-      id
-    )
+      SET date_posted = ${data.date_posted},
+          platform = ${data.platform},
+          activity_type = ${data.activity_type},
+          subreddit = ${data.subreddit || null},
+          is_promotional = ${data.is_promotional ?? 0},
+          url = ${data.url},
+          title = ${data.title || null},
+          topic_tags = ${JSON.stringify(data.topic_tags)},
+          notes = ${data.notes || null},
+          logged_by = ${data.logged_by || null}
+      WHERE id = ${id}
+    `
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
   }
 }
 
-export function deleteActivity(id: string): { success: boolean; error?: string } {
-  if (!db) return { success: false, error: 'Database connection not available.' }
+export async function deleteActivity(id: string): Promise<{ success: boolean; error?: string }> {
+  const sql = await getSql()
+  if (!sql) return { success: false, error: 'Database connection not available.' }
   try {
-    db.prepare(`DELETE FROM activities WHERE id = ?`).run(id)
+    await sql`DELETE FROM activities WHERE id = ${id}`
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
   }
 }
 
-export function updateScrapedMetrics(id: string, data: {
+export async function updateScrapedMetrics(id: string, data: {
   scraped_upvotes?: number
   scraped_comments?: number
   scraped_views?: number
   title?: string
 }) {
-  if (!db) return
+  const sql = await getSql()
+  if (!sql) return
   try {
-    db.prepare(`
+    await sql`
       UPDATE activities
-      SET scraped_upvotes = ?,
-          scraped_comments = ?,
-          scraped_views = ?,
-          title = COALESCE(?, title),
-          last_scraped_at = datetime('now')
-      WHERE id = ?
-    `).run(
-      data.scraped_upvotes ?? 0,
-      data.scraped_comments ?? 0,
-      data.scraped_views ?? 0,
-      data.title || null,
-      id
-    )
+      SET scraped_upvotes = ${data.scraped_upvotes ?? 0},
+          scraped_comments = ${data.scraped_comments ?? 0},
+          scraped_views = ${data.scraped_views ?? 0},
+          title = COALESCE(${data.title || null}, title),
+          last_scraped_at = NOW()
+      WHERE id = ${id}
+    `
   } catch {}
 }
 
 // ─── Analytics Queries ────────────────────────────────────────
 
-export function getWeeklyVelocity(): { week: string; count: number }[] {
-  if (!db) return []
+export async function getWeeklyVelocity(): Promise<{ week: string; count: number }[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    return db.prepare(`
+    return await sql`
       SELECT
-        strftime('%Y-W%W', date_posted) AS week,
-        COUNT(*) AS count
+        to_char(date_posted, 'YYYY-W"W"IW') AS week,
+        COUNT(*)::int AS count
       FROM activities
-      WHERE date_posted >= date('now', '-84 days')
+      WHERE date_posted >= CURRENT_DATE - INTERVAL '84 days'
       GROUP BY week
       ORDER BY week ASC
-    `).all() as { week: string; count: number }[]
+    ` as any
   } catch { return [] }
 }
 
-export function getPlatformDistribution(): { platform: string; count: number }[] {
-  if (!db) return []
+export async function getPlatformDistribution(): Promise<{ platform: string; count: number }[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    return db.prepare(`
-      SELECT platform, COUNT(*) AS count
+    return await sql`
+      SELECT platform, COUNT(*)::int AS count
       FROM activities
       GROUP BY platform
       ORDER BY count DESC
-    `).all() as { platform: string; count: number }[]
+    ` as any
   } catch { return [] }
 }
 
-export function getActivityTypeBreakdown(): { activity_type: string; count: number }[] {
-  if (!db) return []
+export async function getActivityTypeBreakdown(): Promise<{ activity_type: string; count: number }[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    return db.prepare(`
-      SELECT activity_type, COUNT(*) AS count
+    return await sql`
+      SELECT activity_type, COUNT(*)::int AS count
       FROM activities
       GROUP BY activity_type
       ORDER BY count DESC
-    `).all() as { activity_type: string; count: number }[]
+    ` as any
   } catch { return [] }
 }
 
-export function getTopLevelStats() {
-  if (!db) return { total: 0, thisWeek: 0, thisMonth: 0, topPlatform: '—', promotionalCount: 0, organicCount: 0 }
+export async function getTopLevelStats() {
+  const sql = await getSql()
+  if (!sql) return { total: 0, thisWeek: 0, thisMonth: 0, topPlatform: '—', promotionalCount: 0, organicCount: 0 }
   try {
-    const total = (db.prepare(`SELECT COUNT(*) as c FROM activities`).get() as any)?.c || 0
-    const thisWeek = (db.prepare(`
-      SELECT COUNT(*) as c FROM activities
-      WHERE date(date_posted) >= date('now', '-7 days')
-    `).get() as any)?.c || 0
-    const thisMonth = (db.prepare(`
-      SELECT COUNT(*) as c FROM activities
-      WHERE strftime('%Y-%m', date_posted) = strftime('%Y-%m', 'now')
-    `).get() as any)?.c || 0
-    const topPlatform = (db.prepare(`
+    const totalRow = await sql`SELECT COUNT(*)::int as c FROM activities`
+    const total = totalRow[0]?.c || 0
+
+    const thisWeekRow = await sql`
+      SELECT COUNT(*)::int as c FROM activities
+      WHERE date_posted >= CURRENT_DATE - INTERVAL '7 days'
+    `
+    const thisWeek = thisWeekRow[0]?.c || 0
+
+    const thisMonthRow = await sql`
+      SELECT COUNT(*)::int as c FROM activities
+      WHERE to_char(date_posted, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM')
+    `
+    const thisMonth = thisMonthRow[0]?.c || 0
+
+    const topPlatformRow = await sql`
       SELECT platform FROM activities
       GROUP BY platform ORDER BY COUNT(*) DESC LIMIT 1
-    `).get() as any)?.platform || '—'
-    const promotionalCount = (db.prepare(`
-      SELECT COUNT(*) as c FROM activities WHERE is_promotional = 1
-    `).get() as any)?.c || 0
-    const organicCount = (db.prepare(`
-      SELECT COUNT(*) as c FROM activities WHERE is_promotional = 0
-    `).get() as any)?.c || 0
+    `
+    const topPlatform = topPlatformRow[0]?.platform || '—'
+
+    const promotionalRow = await sql`
+      SELECT COUNT(*)::int as c FROM activities WHERE is_promotional = 1
+    `
+    const promotionalCount = promotionalRow[0]?.c || 0
+
+    const organicRow = await sql`
+      SELECT COUNT(*)::int as c FROM activities WHERE is_promotional = 0
+    `
+    const organicCount = organicRow[0]?.c || 0
 
     return { total, thisWeek, thisMonth, topPlatform, promotionalCount, organicCount }
   } catch {
@@ -296,67 +300,75 @@ export function getTopLevelStats() {
   }
 }
 
-export function getPlatformWeeklyCount(): { platform: string; count: number }[] {
-  if (!db) return []
+export async function getPlatformWeeklyCount(): Promise<{ platform: string; count: number }[]> {
+  const sql = await getSql()
+  if (!sql) return []
   try {
-    return db.prepare(`
-      SELECT platform, COUNT(*) as count FROM activities
-      WHERE date(date_posted) >= date('now', '-7 days')
+    return await sql`
+      SELECT platform, COUNT(*)::int as count FROM activities
+      WHERE date_posted >= CURRENT_DATE - INTERVAL '7 days'
       GROUP BY platform
-    `).all() as { platform: string; count: number }[]
+    ` as any
   } catch { return [] }
 }
 
 // ─── Topics ──────────────────────────────────────────────────
 
-export function getAllTopics(): Topic[] {
-  if (!db) return DEFAULT_TOPICS
+export async function getAllTopics(): Promise<Topic[]> {
+  const sql = await getSql()
+  if (!sql) return DEFAULT_TOPICS
   try {
-    const topics = db.prepare(`SELECT * FROM topics ORDER BY name ASC`).all() as Topic[]
+    const topics = await sql`SELECT * FROM topics ORDER BY name ASC` as any
     return topics.length ? topics : DEFAULT_TOPICS
   } catch { return DEFAULT_TOPICS }
 }
 
-export function getActiveTopics(): Topic[] {
-  if (!db) return DEFAULT_TOPICS
+export async function getActiveTopics(): Promise<Topic[]> {
+  const sql = await getSql()
+  if (!sql) return DEFAULT_TOPICS
   try {
-    const topics = db.prepare(`SELECT * FROM topics WHERE is_active = 1 ORDER BY name ASC`).all() as Topic[]
+    const topics = await sql`SELECT * FROM topics WHERE is_active = 1 ORDER BY name ASC` as any
     return topics.length ? topics : DEFAULT_TOPICS
   } catch { return DEFAULT_TOPICS }
 }
 
-export function insertTopic(name: string, color: string): { success: boolean; error?: string } {
-  if (!db) return { success: false, error: 'Database connection not available.' }
+export async function insertTopic(name: string, color: string): Promise<{ success: boolean; error?: string }> {
+  const sql = await getSql()
+  if (!sql) return { success: false, error: 'Database connection not available.' }
   try {
-    db.prepare(`INSERT INTO topics (id, name, color) VALUES (?, ?, ?)`).run(randomUUID(), name, color)
+    await sql`INSERT INTO topics (id, name, color) VALUES (${randomUUID()}, ${name}, ${color})`
     return { success: true }
   } catch (e: any) {
-    if (e.message?.includes('UNIQUE')) return { success: false, error: 'Topic already exists' }
+    if (e.message?.includes('unique') || e.message?.includes('duplicate')) return { success: false, error: 'Topic already exists' }
     return { success: false, error: e.message }
   }
 }
 
-export function toggleTopic(id: string, isActive: boolean) {
-  if (!db) return
-  try { db.prepare(`UPDATE topics SET is_active = ? WHERE id = ?`).run(isActive ? 1 : 0, id) } catch {}
+export async function toggleTopic(id: string, isActive: boolean) {
+  const sql = await getSql()
+  if (!sql) return
+  try { await sql`UPDATE topics SET is_active = ${isActive ? 1 : 0} WHERE id = ${id}` } catch {}
 }
 
-export function renameTopic(id: string, name: string) {
-  if (!db) return
-  try { db.prepare(`UPDATE topics SET name = ? WHERE id = ?`).run(name, id) } catch {}
+export async function renameTopic(id: string, name: string) {
+  const sql = await getSql()
+  if (!sql) return
+  try { await sql`UPDATE topics SET name = ${name} WHERE id = ${id}` } catch {}
 }
 
 // ─── Settings ────────────────────────────────────────────────
 
-export function getSetting(key: string): string | null {
-  if (!db) return '10'
+export async function getSetting(key: string): Promise<string | null> {
+  const sql = await getSql()
+  if (!sql) return '10'
   try {
-    const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as any
-    return row?.value ?? '10'
+    const row = await sql`SELECT value FROM settings WHERE key = ${key}`
+    return row[0]?.value ?? '10'
   } catch { return '10' }
 }
 
-export function setSetting(key: string, value: string) {
-  if (!db) return
-  try { db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`).run(key, value) } catch {}
+export async function setSetting(key: string, value: string) {
+  const sql = await getSql()
+  if (!sql) return
+  try { await sql`INSERT INTO settings (key, value) VALUES (${key}, ${value}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value` } catch {}
 }

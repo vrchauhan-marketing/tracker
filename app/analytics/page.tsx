@@ -10,20 +10,23 @@ import {
 } from '@/lib/queries'
 import AnalyticsCharts from '@/components/AnalyticsCharts'
 
-export default function AnalyticsPage() {
-  const stats = getTopLevelStats()
-  const velocity = getWeeklyVelocity()
-  const platforms = getPlatformDistribution()
-  const types = getActivityTypeBreakdown()
-  const allTopics = getAllTopics()
-  const allActivities = getAllActivities()
-  const weeklyTarget = parseInt(getSetting('weekly_target') ?? '10')
+export default async function AnalyticsPage() {
+  const stats = await getTopLevelStats()
+  const velocity = await getWeeklyVelocity()
+  const platforms = await getPlatformDistribution()
+  const types = await getActivityTypeBreakdown()
+  const allTopics = await getAllTopics()
+  const allActivities = await getAllActivities()
+  const rawTarget = await getSetting('weekly_target')
+  const weeklyTarget = parseInt(rawTarget ?? '10')
 
   // Calculate topic coverage from all activities
   const topicCounts: Record<string, number> = {}
   allActivities.forEach(a => {
-    const tags: string[] = JSON.parse(a.topic_tags || '[]')
-    tags.forEach(t => { topicCounts[t] = (topicCounts[t] ?? 0) + 1 })
+    try {
+      const tags: string[] = JSON.parse(a.topic_tags || '[]')
+      tags.forEach(t => { topicCounts[t] = (topicCounts[t] ?? 0) + 1 })
+    } catch {}
   })
 
   const topicData = allTopics
