@@ -1,7 +1,5 @@
 import 'server-only'
-
-export type Platform = 'Reddit' | 'Quora' | 'Dev.to' | 'Medium' | 'LinkedIn' | 'Other'
-export type ActivityType = 'Article' | 'Post / Thread' | 'Comment / Answer'
+import type { Platform, ActivityType } from './queries'
 
 // Detect platform from URL domain
 export function detectPlatform(url: string): Platform {
@@ -12,8 +10,21 @@ export function detectPlatform(url: string): Platform {
     if (hostname.includes('dev.to')) return 'Dev.to'
     if (hostname.includes('medium.com')) return 'Medium'
     if (hostname.includes('linkedin.com')) return 'LinkedIn'
+    if (hostname.includes('facebook.com') || hostname.includes('fb.watch')) return 'Facebook'
+    if (hostname.includes('instagram.com') || hostname.includes('instagr.am')) return 'Instagram'
   } catch {}
   return 'Other'
+}
+
+// Extract subreddit name from Reddit URL (e.g. https://reddit.com/r/startups/comments/123 -> r/startups)
+export function extractSubreddit(url: string): string | null {
+  try {
+    const match = url.match(/\/r\/([a-zA-Z0-9_]+)/i)
+    if (match && match[1]) {
+      return `r/${match[1]}`
+    }
+  } catch {}
+  return null
 }
 
 // Detect activity type from URL pattern
@@ -22,11 +33,10 @@ export function detectActivityType(url: string): ActivityType {
     const lower = url.toLowerCase()
     // Reddit: /r/sub/comments/id/title = Post; /r/sub/comments/id/title/?context = Comment
     if (lower.includes('reddit.com') && lower.includes('/comments/')) {
-      // If URL ends with comment hash or has context param it's a comment
       if (lower.includes('?context') || /#[a-z0-9]+$/.test(lower)) return 'Comment / Answer'
       return 'Post / Thread'
     }
-    // Quora: question URLs are posts, /profile/ answers are answers
+    // Quora: question URLs are posts, /profile/ or /answer/ are answers
     if (lower.includes('quora.com')) {
       if (lower.includes('/answer/') || lower.includes('/profile/')) return 'Comment / Answer'
       return 'Post / Thread'
@@ -50,13 +60,11 @@ export async function scrapeActivity(url: string, id: string): Promise<void> {
       await scrapeGeneric(url, id)
     }
   } catch (e) {
-    // Scraping is best-effort — never throws to caller
     console.error(`[scraper] Failed for ${url}:`, e)
   }
 }
 
 async function scrapeDevTo(url: string, id: string): Promise<void> {
-  // Dev.to has a public API — no key needed
   const slug = url.split('dev.to/').pop()?.replace(/\//g, '/')
   if (!slug) return
 
@@ -78,7 +86,6 @@ async function scrapeDevTo(url: string, id: string): Promise<void> {
 }
 
 async function scrapeReddit(url: string, id: string): Promise<void> {
-  // Use Reddit's JSON API (append .json to any Reddit URL)
   const jsonUrl = url.replace(/\/$/, '') + '.json'
   const res = await fetch(jsonUrl, {
     headers: { 'User-Agent': 'EnactonTracker/1.0' },
@@ -100,7 +107,6 @@ async function scrapeReddit(url: string, id: string): Promise<void> {
 }
 
 async function scrapeGeneric(url: string, id: string): Promise<void> {
-  // Try to fetch the page and extract Open Graph title
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'EnactonTracker/1.0' },

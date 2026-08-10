@@ -7,7 +7,6 @@ declare global {
 function getDatabase() {
   if (global._sqlite) return global._sqlite
   try {
-    // Dynamic require so webpack/turbopack doesn't break when bundling for Edge
     const Database = require('better-sqlite3')
     const path = require('path')
     const fs = require('fs')
@@ -23,10 +22,14 @@ function getDatabase() {
       const schema = fs.readFileSync(schemaPath, 'utf-8')
       db.exec(schema)
     }
+
+    // Auto-migrate columns if missing in existing database
+    try { db.exec(`ALTER TABLE activities ADD COLUMN subreddit TEXT;`) } catch {}
+    try { db.exec(`ALTER TABLE activities ADD COLUMN is_promotional INTEGER NOT NULL DEFAULT 0;`) } catch {}
+
     global._sqlite = db
     return db
   } catch (e) {
-    // Graceful fallback for Edge / Cloudflare Workers environment
     return null
   }
 }

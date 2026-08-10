@@ -2,7 +2,7 @@ import 'server-only'
 import { db } from './db'
 import { randomUUID } from 'crypto'
 
-export type Platform = 'Reddit' | 'Quora' | 'Dev.to' | 'Medium' | 'LinkedIn' | 'Other'
+export type Platform = 'Reddit' | 'Quora' | 'Dev.to' | 'Medium' | 'LinkedIn' | 'Facebook' | 'Instagram' | 'Other'
 export type ActivityType = 'Article' | 'Post / Thread' | 'Comment / Answer'
 
 export interface Activity {
@@ -11,6 +11,8 @@ export interface Activity {
   date_posted: string
   platform: Platform
   activity_type: ActivityType
+  subreddit: string | null
+  is_promotional: number // 1 = Mentioned Enacton, 0 = No Mention
   url: string
   title: string | null
   topic_tags: string
@@ -58,12 +60,12 @@ export function getActivitiesThisWeek(): Activity[] {
     return db.prepare(`
       SELECT * FROM activities
       WHERE date(date_posted) >= date('now', '-7 days')
-      ORDER BY date_posted DESC
+      ORDER BY date_posted DESC, created_at DESC
     `).all() as Activity[]
   } catch { return [] }
 }
 
-export function getActivitiesFiltered(platform?: string, topic?: string): Activity[] {
+export function getActivitiesFiltered(platform?: string, topic?: string, promotional?: string): Activity[] {
   if (!db) return []
   try {
     let query = `SELECT * FROM activities WHERE 1=1`
@@ -76,6 +78,10 @@ export function getActivitiesFiltered(platform?: string, topic?: string): Activi
     if (topic && topic !== 'all') {
       query += ` AND topic_tags LIKE ?`
       params.push(`%${topic}%`)
+    }
+    if (promotional && promotional !== 'all') {
+      query += ` AND is_promotional = ?`
+      params.push(promotional === 'yes' ? '1' : '0')
     }
 
     query += ` ORDER BY date_posted DESC, created_at DESC`
@@ -94,6 +100,8 @@ export function insertActivity(data: {
   date_posted: string
   platform: string
   activity_type: string
+  subreddit?: string
+  is_promotional?: number
   url: string
   title?: string
   topic_tags: string[]
@@ -104,13 +112,15 @@ export function insertActivity(data: {
   if (!db) return { success: false, error: 'Database connection not available.' }
   try {
     db.prepare(`
-      INSERT INTO activities (id, date_posted, platform, activity_type, url, title, topic_tags, notes, screenshot, logged_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO activities (id, date_posted, platform, activity_type, subreddit, is_promotional, url, title, topic_tags, notes, screenshot, logged_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(),
       data.date_posted,
       data.platform,
       data.activity_type,
+      data.subreddit || null,
+      data.is_promotional ?? 0,
       data.url,
       data.title || null,
       JSON.stringify(data.topic_tags),
@@ -195,7 +205,7 @@ export function getActivityTypeBreakdown(): { activity_type: string; count: numb
 }
 
 export function getTopLevelStats() {
-  if (!db) return { total: 0, thisWeek: 0, thisMonth: 0, topPlatform: '—' }
+  if (!db) return { total: 0, thisWeek: 0, thisMonth: 0, topPlatform: '—', promotionalCount: 0, organicCount: 0 }
   try {
     const total = (db.prepare(`SELECT COUNT(*) as c FROM activities`).get() as any)?.c || 0
     const thisWeek = (db.prepare(`
@@ -210,10 +220,16 @@ export function getTopLevelStats() {
       SELECT platform FROM activities
       GROUP BY platform ORDER BY COUNT(*) DESC LIMIT 1
     `).get() as any)?.platform || '—'
+    const promotionalCount = (db.prepare(`
+      SELECT COUNT(*) as c FROM activities WHERE is_promotional = 1
+    `).get() as any)?.c || 0
+    const organicCount = (db.prepare(`
+      SELECT COUNT(*) as c FROM activities WHERE is_promotional = 0
+    `).get() as any)?.c || 0
 
-    return { total, thisWeek, thisMonth, topPlatform }
+    return { total, thisWeek, thisMonth, topPlatform, promotionalCount, organicCount }
   } catch {
-    return { total: 0, thisWeek: 0, thisMonth: 0, topPlatform: '—' }
+    return { total: 0, thisWeek: 0, thisMonth: 0, topPlatform: '—', promotionalCount: 0, organicCount: 0 }
   }
 }
 

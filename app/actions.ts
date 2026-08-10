@@ -1,6 +1,6 @@
 'use server'
 import { insertActivity } from '@/lib/queries'
-import { detectPlatform, detectActivityType, scrapeActivity } from '@/lib/scraper'
+import { detectPlatform, detectActivityType, extractSubreddit, scrapeActivity } from '@/lib/scraper'
 import { revalidatePath } from 'next/cache'
 
 export async function logActivityAction(formData: FormData) {
@@ -12,6 +12,15 @@ export async function logActivityAction(formData: FormData) {
   const notes = (formData.get('notes') as string)?.trim() || undefined
   const logged_by = (formData.get('logged_by') as string)?.trim() || undefined
   const topic_tags: string[] = formData.getAll('topic_tags') as string[]
+  
+  // Subreddit (auto-extract from Reddit URL if left empty)
+  let subreddit = (formData.get('subreddit') as string)?.trim() || undefined
+  if (platform === 'Reddit' && !subreddit && url) {
+    subreddit = extractSubreddit(url) || undefined
+  }
+
+  // Is Promotional (Enacton Mentioned)
+  const is_promotional = formData.get('is_promotional') === '1' ? 1 : 0
 
   // Validate
   if (!url) return { success: false, error: 'URL is required' }
@@ -32,6 +41,8 @@ export async function logActivityAction(formData: FormData) {
     date_posted,
     platform,
     activity_type,
+    subreddit,
+    is_promotional,
     url,
     title,
     topic_tags,

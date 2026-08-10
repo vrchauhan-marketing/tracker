@@ -3,7 +3,7 @@ import { useState, useRef, useTransition } from 'react'
 import { logActivityAction } from '@/app/actions'
 import type { Topic } from '@/lib/queries'
 
-const PLATFORMS = ['Reddit', 'Quora', 'Dev.to', 'Medium', 'LinkedIn', 'Other']
+const PLATFORMS = ['Reddit', 'Quora', 'Dev.to', 'Medium', 'LinkedIn', 'Facebook', 'Instagram', 'Other']
 const ACTIVITY_TYPES = ['Article', 'Post / Thread', 'Comment / Answer']
 
 function detectPlatformClient(url: string): string {
@@ -14,6 +14,8 @@ function detectPlatformClient(url: string): string {
     if (h.includes('dev.to')) return 'Dev.to'
     if (h.includes('medium.com')) return 'Medium'
     if (h.includes('linkedin.com')) return 'LinkedIn'
+    if (h.includes('facebook.com') || h.includes('fb.watch')) return 'Facebook'
+    if (h.includes('instagram.com') || h.includes('instagr.am')) return 'Instagram'
   } catch {}
   return ''
 }
@@ -29,10 +31,20 @@ function detectTypeClient(url: string): string {
   return ''
 }
 
+function extractSubredditClient(url: string): string {
+  try {
+    const match = url.match(/\/r\/([a-zA-Z0-9_]+)/i)
+    if (match && match[1]) return `r/${match[1]}`
+  } catch {}
+  return ''
+}
+
 export default function LogForm({ topics }: { topics: Topic[] }) {
   const [url, setUrl] = useState('')
   const [platform, setPlatform] = useState('')
   const [activityType, setActivityType] = useState('')
+  const [subreddit, setSubreddit] = useState('')
+  const [isPromotional, setIsPromotional] = useState(false)
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
@@ -45,8 +57,11 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
     if (!val) return
     const detectedPlatform = detectPlatformClient(val)
     const detectedType = detectTypeClient(val)
+    const detectedSub = extractSubredditClient(val)
+
     if (detectedPlatform && !platform) setPlatform(detectedPlatform)
     if (detectedType && !activityType) setActivityType(detectedType)
+    if (detectedSub && !subreddit) setSubreddit(detectedSub)
   }
 
   function handleScreenshot(e: React.ChangeEvent<HTMLInputElement>) {
@@ -69,17 +84,17 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
     if (!selectedTopics.length) { setResult({ error: 'Select at least one topic' }); return }
 
     const formData = new FormData(formRef.current!)
-    // Append selected topics
     formData.delete('topic_tags')
     selectedTopics.forEach(t => formData.append('topic_tags', t))
+    formData.set('is_promotional', isPromotional ? '1' : '0')
 
     setResult(null)
     startTransition(async () => {
       const res = await logActivityAction(formData)
       setResult(res)
       if (res.success) {
-        setUrl(''); setPlatform(''); setActivityType('')
-        setSelectedTopics([]); setScreenshotPreview(null)
+        setUrl(''); setPlatform(''); setActivityType(''); setSubreddit('')
+        setIsPromotional(false); setSelectedTopics([]); setScreenshotPreview(null)
         setDate(new Date().toISOString().split('T')[0])
         formRef.current?.reset()
       }
@@ -88,27 +103,28 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="card space-y-5">
-
       {result?.success && <div className="alert-success">✅ Activity logged successfully!</div>}
       {result?.error && <div className="alert-error">⚠️ {result.error}</div>}
 
       {/* URL */}
       <div>
-        <label className="label">URL *</label>
+        <label className="label">Post / Comment URL *</label>
         <input
           name="url"
           type="url"
           className="input"
           placeholder="https://reddit.com/r/startups/comments/..."
           value={url}
-          onChange={e => setUrl(e.target.value)}
+          onChange={e => { setUrl(e.target.value); handleUrlBlur({ target: e.target } as any) }}
           onBlur={handleUrlBlur}
           required
         />
         {platform && (
-          <p className="text-xs text-slate-500 mt-1">
-            Auto-detected: <span className="text-violet-400">{platform}</span>
-            {activityType && <> · <span className="text-violet-400">{activityType}</span></>}
+          <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+            <span>Auto-detected:</span>
+            <span className="text-violet-400 font-medium">{platform}</span>
+            {activityType && <>· <span className="text-violet-400 font-medium">{activityType}</span></>}
+            {subreddit && <>· <span className="text-orange-400 font-medium">{subreddit}</span></>}
           </p>
         )}
       </div>
@@ -131,10 +147,42 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
         </div>
       </div>
 
+      {/* Subreddit (if Reddit) */}
+      {(platform === 'Reddit' || subreddit) && (
+        <div>
+          <label className="label">Subreddit Name <span className="text-slate-500 normal-case font-normal">(e.g. r/startups, r/webdev)</span></label>
+          <input
+            name="subreddit"
+            type="text"
+            className="input"
+            placeholder="r/startups"
+            value={subreddit}
+            onChange={e => setSubreddit(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* Promotional / Enacton Mention Toggle */}
+      <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-200">Mentioned Enacton?</div>
+          <div className="text-xs text-slate-500">Is this post/comment promotional (contains Enacton brand link/mention)?</div>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isPromotional}
+            onChange={e => setIsPromotional(e.target.checked)}
+            className="sr-only peer"
+          />
+          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+        </label>
+      </div>
+
       {/* Topics */}
       <div>
-        <label className="label">Topic Tags * <span className="text-slate-600 normal-case font-normal">(select all that apply)</span></label>
-        <div className="flex flex-wrap gap-2 p-3 rounded-lg" style={{ background: '#0f172a', border: '1px solid #334155' }}>
+        <label className="label">Topic Tags * <span className="text-slate-500 normal-case font-normal">(select all that apply)</span></label>
+        <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-slate-900/80 border border-slate-800">
           {topics.map(topic => {
             const selected = selectedTopics.includes(topic.name)
             return (
@@ -173,7 +221,7 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
 
       {/* Divider */}
       <hr className="divider" />
-      <p className="text-xs text-slate-600 uppercase font-semibold tracking-wider">Optional</p>
+      <p className="text-xs text-slate-500 uppercase font-semibold tracking-wider">Optional Metadata</p>
 
       {/* Title */}
       <div>
@@ -183,16 +231,16 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
 
       {/* Notes */}
       <div>
-        <label className="label">Notes</label>
-        <textarea name="notes" className="input" placeholder="e.g. Got 47 upvotes in first 2 hours, lots of engagement from founders" />
+        <label className="label">Notes / Comment Body Snippet</label>
+        <textarea name="notes" className="input" placeholder="What did you comment or write in this post?" />
       </div>
 
       {/* Screenshot */}
       <div>
         <label className="label">Screenshot</label>
         <div
-          className="rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors"
-          style={{ borderColor: screenshotPreview ? '#8b5cf6' : '#334155', background: '#0f172a' }}
+          className="rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors bg-slate-900/80"
+          style={{ borderColor: screenshotPreview ? '#8b5cf6' : '#334155' }}
           onClick={() => document.getElementById('screenshot-input')?.click()}
         >
           {screenshotPreview ? (
@@ -202,8 +250,8 @@ export default function LogForm({ topics }: { topics: Topic[] }) {
               <svg className="mx-auto mb-2 text-slate-600" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
               </svg>
-              <p className="text-sm text-slate-500">Drop screenshot here or click to upload</p>
-              <p className="text-xs text-slate-700 mt-1">PNG, JPG, WEBP</p>
+              <p className="text-sm text-slate-400">Drop screenshot here or click to upload</p>
+              <p className="text-xs text-slate-600 mt-1">PNG, JPG, WEBP</p>
             </>
           )}
         </div>

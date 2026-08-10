@@ -4,18 +4,11 @@ import Link from 'next/link'
 
 const PLATFORM_CLASS: Record<string, string> = {
   Reddit: 'platform-reddit', Quora: 'platform-quora', 'Dev.to': 'platform-devto',
-  Medium: 'platform-medium', LinkedIn: 'platform-linkedin', Other: 'platform-other',
+  Medium: 'platform-medium', LinkedIn: 'platform-linkedin', Facebook: 'bg-blue-600/20 text-blue-400 border-blue-500/30',
+  Instagram: 'bg-pink-600/20 text-pink-400 border-pink-500/30', Other: 'platform-other',
 }
 const TYPE_CLASS: Record<string, string> = {
   'Article': 'badge-article', 'Post / Thread': 'badge-post', 'Comment / Answer': 'badge-comment',
-}
-
-function getPlatformDot(platform: string) {
-  const colors: Record<string, string> = {
-    Reddit: '#fb923c', Quora: '#f87171', 'Dev.to': '#e2e8f0',
-    Medium: '#4ade80', LinkedIn: '#38bdf8', Other: '#a1a1aa',
-  }
-  return colors[platform] ?? '#a1a1aa'
 }
 
 export default function ThisWeekPage() {
@@ -36,7 +29,7 @@ export default function ThisWeekPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">This Week</h1>
-          <p className="text-slate-500 text-sm mt-1">Your GEO activity snapshot</p>
+          <p className="text-slate-500 text-sm mt-1">Your GEO community activity snapshot</p>
         </div>
         <Link href="/log" className="btn-primary flex items-center gap-2">
           <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -59,8 +52,9 @@ export default function ThisWeekPage() {
           )}
         </div>
         <div className="stat-card">
-          <div className="stat-value">{stats.thisMonth}</div>
-          <div className="stat-label">This Month</div>
+          <div className="stat-value text-emerald-400">{stats.promotionalCount}</div>
+          <div className="stat-label">Enacton Mentioned</div>
+          <div className="text-xs text-slate-600 mt-1">{stats.organicCount} Organic Value Posts</div>
         </div>
         <div className="stat-card">
           <div className="stat-value text-lg">{stats.topPlatform}</div>
@@ -106,12 +100,12 @@ export default function ThisWeekPage() {
 
         {/* Quick tip */}
         <div className="card" style={{ borderColor: '#8b5cf630', background: '#1a1040' }}>
-          <div className="section-title" style={{ color: '#a78bfa' }}>💡 Quick Note</div>
+          <div className="section-title" style={{ color: '#a78bfa' }}>💡 Daily Logging Routine</div>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Log every community activity within 24 hours of posting. Consistent data is what makes the analytics meaningful.
+            Track posts daily across Reddit, Quora, Dev.to, Medium, LinkedIn, Facebook, and Instagram. Specify if Enacton was mentioned.
           </p>
           <Link href="/log" className="btn-primary mt-4 inline-block text-center w-full" style={{ textAlign: 'center', display: 'block' }}>
-            Log Now
+            Log Post Now
           </Link>
         </div>
       </div>
@@ -120,7 +114,7 @@ export default function ThisWeekPage() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <div className="section-title mb-0">Recent Activity</div>
-          <Link href="/feed" className="text-sm text-violet-400 hover:text-violet-300">View all →</Link>
+          <Link href="/feed" className="text-sm text-violet-400 hover:text-violet-300">View full feed →</Link>
         </div>
 
         {weekActivities.length === 0 ? (
@@ -134,11 +128,11 @@ export default function ThisWeekPage() {
             <thead>
               <tr>
                 <th>Platform</th>
-                <th>Post</th>
+                <th>Post / Link</th>
+                <th>Mention</th>
                 <th>Topics</th>
                 <th>Type</th>
                 <th>Date</th>
-                <th>Engagement</th>
               </tr>
             </thead>
             <tbody>
@@ -146,12 +140,24 @@ export default function ThisWeekPage() {
                 const tags: string[] = JSON.parse(a.topic_tags || '[]')
                 return (
                   <tr key={a.id}>
-                    <td><span className={`badge ${PLATFORM_CLASS[a.platform] ?? 'platform-other'}`}>{a.platform}</span></td>
+                    <td>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`badge ${PLATFORM_CLASS[a.platform] ?? 'platform-other'}`}>{a.platform}</span>
+                        {a.subreddit && <span className="text-[0.7rem] px-1.5 py-0.5 rounded bg-orange-950/60 text-orange-400 border border-orange-800/40 font-mono">{a.subreddit}</span>}
+                      </div>
+                    </td>
                     <td style={{ maxWidth: '280px' }}>
                       <a href={a.url} target="_blank" rel="noopener noreferrer"
-                        className="text-slate-200 hover:text-violet-300 transition-colors truncate block text-sm">
+                        className="text-slate-200 hover:text-violet-300 transition-colors truncate block text-sm underline decoration-slate-700 underline-offset-2">
                         {a.title || a.url}
                       </a>
+                    </td>
+                    <td>
+                      {a.is_promotional === 1 ? (
+                        <span className="text-xs px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/50">🟢 Mentioned</span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-800/60 text-slate-400 border border-slate-700/50">⚪ Organic</span>
+                      )}
                     </td>
                     <td>
                       <div className="flex flex-wrap gap-1">
@@ -163,11 +169,6 @@ export default function ThisWeekPage() {
                     </td>
                     <td><span className={`badge ${TYPE_CLASS[a.activity_type] ?? 'badge-comment'}`}>{a.activity_type}</span></td>
                     <td className="text-slate-500 text-xs">{a.date_posted}</td>
-                    <td className="text-slate-500 text-xs whitespace-nowrap">
-                      {a.scraped_upvotes > 0 && <span>⬆ {a.scraped_upvotes} </span>}
-                      {a.scraped_comments > 0 && <span>💬 {a.scraped_comments}</span>}
-                      {a.scraped_upvotes === 0 && a.scraped_comments === 0 && '—'}
-                    </td>
                   </tr>
                 )
               })}
