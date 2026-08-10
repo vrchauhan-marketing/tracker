@@ -13,7 +13,7 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 function createMcpServer() {
     const server = new Server({
-        name: 'enacton-tracker-mcp',
+        name: 'tracker-mcp',
         version: '1.0.0',
     }, {
         capabilities: {
@@ -25,7 +25,7 @@ function createMcpServer() {
             tools: [
                 {
                     name: 'log_activity',
-                    description: 'Log a community outreach activity (Reddit, Quora, Dev.to, Medium, LinkedIn) into the Enacton Activity Tracker database.',
+                    description: 'Log a community outreach activity (Reddit, Quora, Dev.to, Medium, LinkedIn) into the Tracker database.',
                     inputSchema: {
                         type: 'object',
                         properties: {
@@ -46,7 +46,7 @@ function createMcpServer() {
                             topic_tags: {
                                 type: 'array',
                                 items: { type: 'string' },
-                                description: 'Target Enacton topics (e.g. ["MVP Development & Rescue", "SaaS Development"])',
+                                description: 'Target topics (e.g. ["MVP Development & Rescue", "SaaS Development"])',
                             },
                             date_posted: {
                                 type: 'string',
@@ -92,7 +92,7 @@ function createMcpServer() {
                     content: [
                         {
                             type: 'text',
-                            text: `✅ Successfully logged activity to Enacton Tracker!\n• Platform: ${platform}\n• Type: ${activity_type}\n• Topics: ${topic_tags.join(', ')}\n• URL: ${url}`,
+                            text: `✅ Successfully logged activity to Tracker!\n• Platform: ${platform}\n• Type: ${activity_type}\n• Topics: ${topic_tags.join(', ')}\n• URL: ${url}`,
                         },
                     ],
                 };
@@ -103,7 +103,7 @@ function createMcpServer() {
                         content: [
                             {
                                 type: 'text',
-                                text: `⚠️ This URL has already been logged in the Enacton Tracker: ${url}`,
+                                text: `⚠️ This URL has already been logged in the Tracker: ${url}`,
                             },
                         ],
                     };
@@ -122,14 +122,14 @@ function createMcpServer() {
             const total = db.prepare(`SELECT COUNT(*) as c FROM activities`).get().c;
             const thisWeek = db.prepare(`
         SELECT COUNT(*) as c FROM activities
-        WHERE date(date_posted) >= date('now', 'weekday 0', '-7 days')
+        WHERE date(date_posted) >= date('now', '-7 days')
       `).get().c;
             const platforms = db.prepare(`
         SELECT platform, COUNT(*) as count FROM activities
-        WHERE date(date_posted) >= date('now', 'weekday 0', '-7 days')
+        WHERE date(date_posted) >= date('now', '-7 days')
         GROUP BY platform
       `).all();
-            const summary = `📊 Enacton Tracker Status:\n• Total Activities (All time): ${total}\n• Activities This Week: ${thisWeek}\n• Platforms This Week:\n${platforms.map(p => `  - ${p.platform}: ${p.count}`).join('\n') || '  (No activity yet this week)'}`;
+            const summary = `📊 Tracker Status:\n• Total Activities (All time): ${total}\n• Activities This Week: ${thisWeek}\n• Platforms This Week:\n${platforms.map(p => `  - ${p.platform}: ${p.count}`).join('\n') || '  (No activity yet this week)'}`;
             return {
                 content: [{ type: 'text', text: summary }],
             };
@@ -141,7 +141,6 @@ function createMcpServer() {
 // ─── HTTP / SSE Server for Remote MCP connectors ──────────────
 const sseTransports = new Map();
 const httpServer = http.createServer(async (req, res) => {
-    // CORS Headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -151,7 +150,6 @@ const httpServer = http.createServer(async (req, res) => {
         return;
     }
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
-    // SSE endpoint
     if (url.pathname === '/sse') {
         const transport = new SSEServerTransport('/messages', res);
         const sessionId = transport.sessionId;
@@ -161,7 +159,6 @@ const httpServer = http.createServer(async (req, res) => {
         await serverInstance.connect(transport);
         return;
     }
-    // SSE message endpoint
     if (url.pathname === '/messages') {
         const sessionId = url.searchParams.get('sessionId');
         if (!sessionId || !sseTransports.has(sessionId)) {
@@ -178,9 +175,8 @@ const httpServer = http.createServer(async (req, res) => {
 });
 const PORT = 3001;
 httpServer.listen(PORT, () => {
-    console.error(`Enacton Tracker MCP HTTP/SSE server running at http://localhost:${PORT}/sse`);
+    console.error(`Tracker MCP HTTP/SSE server running at http://localhost:${PORT}/sse`);
 });
-// ─── Also support Stdio Transport if launched directly via CLI ──
 if (process.env.MCP_TRANSPORT === 'stdio') {
     const stdioServer = createMcpServer();
     const stdioTransport = new StdioServerTransport();

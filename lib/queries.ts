@@ -57,7 +57,7 @@ export function getActivitiesThisWeek(): Activity[] {
   try {
     return db.prepare(`
       SELECT * FROM activities
-      WHERE date(date_posted) >= date('now', 'weekday 0', '-7 days')
+      WHERE date(date_posted) >= date('now', '-7 days')
       ORDER BY date_posted DESC
     `).all() as Activity[]
   } catch { return [] }
@@ -101,11 +101,11 @@ export function insertActivity(data: {
   screenshot?: string
   logged_by?: string
 }): { success: boolean; error?: string } {
-  if (!db) return { success: false, error: 'Database connection not available on edge.' }
+  if (!db) return { success: false, error: 'Database connection not available.' }
   try {
     db.prepare(`
       INSERT INTO activities (id, date_posted, platform, activity_type, url, title, topic_tags, notes, screenshot, logged_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomUUID(),
       data.date_posted,
@@ -200,7 +200,7 @@ export function getTopLevelStats() {
     const total = (db.prepare(`SELECT COUNT(*) as c FROM activities`).get() as any)?.c || 0
     const thisWeek = (db.prepare(`
       SELECT COUNT(*) as c FROM activities
-      WHERE date(date_posted) >= date('now', 'weekday 0', '-7 days')
+      WHERE date(date_posted) >= date('now', '-7 days')
     `).get() as any)?.c || 0
     const thisMonth = (db.prepare(`
       SELECT COUNT(*) as c FROM activities
@@ -222,7 +222,7 @@ export function getPlatformWeeklyCount(): { platform: string; count: number }[] 
   try {
     return db.prepare(`
       SELECT platform, COUNT(*) as count FROM activities
-      WHERE date(date_posted) >= date('now', 'weekday 0', '-7 days')
+      WHERE date(date_posted) >= date('now', '-7 days')
       GROUP BY platform
     `).all() as { platform: string; count: number }[]
   } catch { return [] }
@@ -247,7 +247,7 @@ export function getActiveTopics(): Topic[] {
 }
 
 export function insertTopic(name: string, color: string): { success: boolean; error?: string } {
-  if (!db) return { success: false, error: 'Database connection not available on edge.' }
+  if (!db) return { success: false, error: 'Database connection not available.' }
   try {
     db.prepare(`INSERT INTO topics (id, name, color) VALUES (?, ?, ?)`).run(randomUUID(), name, color)
     return { success: true }
